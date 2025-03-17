@@ -13,7 +13,7 @@ from scipy.interpolate import griddata
 # 设置页面标题和图标
 st.set_page_config(
     page_title="Digital Hydrogen-P",
-    page_icon=r"D:\pythonProject3\streamlit\f8523a5d627f3875452fa1ece3b4d30.png",
+    page_icon=r"f8523a5d627f3875452fa1ece3b4d30.png",
     initial_sidebar_state="expanded"
 )
 
@@ -62,7 +62,7 @@ def image_to_base64(image_path):
         return base64.b64encode(img_file.read()).decode()
 
 
-logo_path = r"D:\pythonProject3\streamlit\f8523a5d627f3875452fa1ece3b4d30.png"
+logo_path = r"f8523a5d627f3875452fa1ece3b4d30.png"
 your_base64_logo = image_to_base64(logo_path)
 
 st.sidebar.markdown(
@@ -166,9 +166,9 @@ def generate_table(min_pressure, max_pressure, step_size, min_temperature, max_t
         else:
             temperatures.append(round(t, 2))
 
-    thermal_df = load_data(r'D:\pythonProject3\streamlit\thermal_conductivity.csv')
-    viscosity_df = load_data(r'D:\pythonProject3\streamlit\viscosity.csv')
-    diffusion_df = load_data(r'D:\pythonProject3\streamlit\kuosanxishu.csv')
+    thermal_df = load_data(r'thermal_conductivity.csv')
+    viscosity_df = load_data(r'viscosity.csv')
+    diffusion_df = load_data(r'kuosanxishu.csv')
 
     table_data = []
     for pressure in pressures:
@@ -202,7 +202,7 @@ def generate_table(min_pressure, max_pressure, step_size, min_temperature, max_t
 
 # 页面逻辑
 if st.session_state.page == "🏠 Home":
-    st.image(r"D:\pythonProject3\streamlit\8c3351f1e7b958ef4fdc8dfb9d5d99f.png", width=400)
+    st.image(r"8c3351f1e7b958ef4fdc8dfb9d5d99f.png", width=400)
     st.title("Digital Hydrogen-P")
     st.write("""
         **欢迎来到 Digital Hydrogen-P**  
@@ -396,9 +396,9 @@ elif st.session_state.page == "📌 定值查询":
             st.warning("请输入压强和温度")
 
         else:
-            thermal_df = load_data(r'D:\pythonProject3\streamlit\thermal_conductivity.csv')
-            viscosity_df = load_data(r'D:\pythonProject3\streamlit\viscosity.csv')
-            diffusion_df = load_data(r'D:\pythonProject3\streamlit\kuosanxishu.csv')
+            thermal_df = load_data(r'thermal_conductivity.csv')
+            viscosity_df = load_data(r'viscosity.csv')
+            diffusion_df = load_data(r'kuosanxishu.csv')
             error_occurred = False
 
             thermal_results = {}
@@ -461,8 +461,8 @@ elif st.session_state.page == "🔬 实验数据查询":
     st.title("🔬 实验数据查询")
 
     # 加载实验数据
-    thermal_df = pd.read_csv(r'D:\pythonProject3\streamlit\shiyanredaol.csv')
-    viscosity_df = pd.read_csv(r'D:\pythonProject3\streamlit\shiyanniandu.csv')
+    thermal_df = pd.read_csv(r'shiyanredaol.csv')
+    viscosity_df = pd.read_csv(r'shiyanniandu.csv')
 
     # 获取所有文章标题
     thermal_article_titles = thermal_df['redaoarticle title'].unique()
