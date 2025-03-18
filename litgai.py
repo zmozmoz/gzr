@@ -9,6 +9,7 @@ import plotly.graph_objects as go
 from scipy.interpolate import make_interp_spline
 from scipy.signal import savgol_filter
 from scipy.interpolate import griddata
+import seaborn as sns
 
 # 设置页面标题和图标
 st.set_page_config(
@@ -54,6 +55,72 @@ if "df_results" not in st.session_state:
 
 if "show_plot" not in st.session_state:
     st.session_state.show_plot = False
+# 在初始化 session_state 部分添加以下内容
+if "units" not in st.session_state:
+    st.session_state.units = {
+        "pressure": "MPa",
+        "temperature": "K",
+        "thermal": "W/m·K",
+        "viscosity": "μPa·s",
+        "diffusion": "m²/s"
+    }
+
+
+# 在数据展示前添加单位转换函数
+def convert_units(value, prop_type):
+    """根据全局设置进行单位转换"""
+    units = st.session_state.units
+    try:
+        # 添加空值检查
+        if value is None:
+            raise ValueError("输入值不能为空")
+
+        # 压力转换
+        if prop_type == "pressure":
+            if units["pressure"] == "bar":
+                return value * 10, "bar"
+            elif units["pressure"] == "kPa":
+                return value * 1000, "kPa"
+            else:
+                return value, "MPa"
+
+        # 温度转换（增加输入值验证）
+        elif prop_type == "temperature":
+            # 检查是否为合理温度值
+            if units["temperature"] == "K" and value < 0:
+                raise ValueError("开尔文温度不能小于0")
+
+            if units["temperature"] == "°C":
+                return value - 273.15, "°C"
+            else:
+                return value, "K"
+
+        # 热导率转换
+        elif prop_type == "thermal":
+            if units["thermal"] == "mW/m·K":
+                return value * 1000, "mW/m·K"
+            else:
+                return value, "W/m·K"
+
+        # 粘度转换
+        elif prop_type == "viscosity":
+            if units["viscosity"] == "mPa·s":
+                return value / 1000, "mPa·s"
+            elif units["viscosity"] == "Pa·s":
+                return value / 1e6, "Pa·s"
+            else:
+                return value, "μPa·s"
+
+        # 扩散系数转换
+        elif prop_type == "diffusion":
+            if units["diffusion"] == "cm²/s":
+                return value * 10000, "cm²/s"
+            else:
+                return value, "m²/s"
+
+    except Exception as e:
+        st.error(f"单位转换错误: {str(e)}")
+        return value, "[ERROR]"
 
 
 # 侧边栏处理
@@ -213,8 +280,8 @@ if st.session_state.page == "🏠 Home":
         **功能介绍**：
         - **定值查询**：轻松快速地输入指定压强和温度，精准获取氢气的热导率、粘度及扩散系数数值
         - **范围查询**：支持自定义压力和温度范围及步长，批量获取氢气的热物性数据，并通过表格与图形直观展示结果，满足多种分析需求。
-        - **模型预测**：提供权威的实验数据来源，允许用户按文献标题选择和浏览热导率、粘度、扩散系数的实验数据，并支持便捷的数据导出功能。
-        - **模型预测**：内置交互式数据可视化工具，支持数据二维、三维可视化展示，帮助用户直观理解数据分布与趋势。
+        - **实验查询**：提供权威的实验数据来源，允许用户按文献标题选择和浏览热导率、粘度、扩散系数的实验数据，并支持便捷的数据导出功能。
+        - **图表展示**：内置交互式数据可视化工具，支持数据二维、三维可视化展示，帮助用户直观理解数据分布与趋势。
     """)
     # st.write("""
     #     **示例文件下载**：
@@ -225,11 +292,11 @@ elif st.session_state.page == "📏 范围查询":
     st.title("📏 范围查询")
     col1, col2 = st.columns(2)
     with col1:
-        min_pressure = st.number_input("最小压强 (MPa)", min_value=0.0, step=5.0, format="%.1f", value=None)
-        max_pressure = st.number_input("最大压强 (MPa)", min_value=min_pressure if min_pressure else 0.0, step=5.0, format="%.1f", value=None)
+        min_pressure = st.number_input("最小压强 (MPa) ", min_value=0.0, step=5.0, format="%.1f", value=None,help="请输入 40 - 200 MPa 之间的数值")
+        max_pressure = st.number_input("最大压强 (MPa) ", min_value=min_pressure if min_pressure else 0.0, step=5.0,format="%.1f", value=None, help="请输入 40 - 200 MPa 之间的数值")
     with col2:
-        min_temperature = st.number_input("最小温度 (K)", min_value=0.0, step=5.0, format="%.1f", value=None)
-        max_temperature = st.number_input("最大温度 (K)", min_value=min_temperature if min_temperature else 0.0, step=5.0, format="%.1f", value=None)
+        min_temperature = st.number_input("最小温度 (K) ", min_value=0.0, step=5.0, format="%.1f", value=None,help="请输入 300 - 700 K 之间的数值")
+        max_temperature = st.number_input("最大温度 (K) ", min_value=min_temperature if min_temperature else 0.0,step=5.0, format="%.1f", value=None, help="请输入 300 - 700 K 之间的数值")
 
     step_size = st.selectbox("步长", [1, 2, 5, 10, 20, 50, 100])
     interpolation_method = st.selectbox("插值方法", ["griddata", "RegularGridInterpolator", "nearest"])
@@ -253,21 +320,76 @@ elif st.session_state.page == "📏 范围查询":
     if st.session_state.df_results is not None and not st.session_state.df_results.empty:
         # 创建格式化副本
         formatted_df = st.session_state.df_results.copy()
+        # 压力列转换
+        formatted_df['Pressure'] = formatted_df['Pressure'].apply(
+            lambda x: convert_units(x, "pressure")[0]
+        )
 
+        # 温度列转换
+        formatted_df['Temperature'] = formatted_df['Temperature'].apply(
+            lambda x: convert_units(x, "temperature")[0]
+        )
 
-        # 识别需要格式化的列
-        diffusion_cols = [col for col in formatted_df.columns if 'Diffusion' in col]
+        # 其他列转换
+        for col in formatted_df.columns:
+            if 'Thermal Conductivity' in col:
+                formatted_df[col] = formatted_df[col].apply(
+                    lambda x: convert_units(x, "thermal")[0]
+                )
+            elif 'Viscosity' in col:
+                formatted_df[col] = formatted_df[col].apply(lambda x: convert_units(x, "viscosity")[0])
+            elif 'Diffusion' in col:
+                formatted_df[col] = formatted_df[col].apply(lambda x: convert_units(x, "diffusion")[0])
 
-        # 应用科学计数法格式化
-        for col in diffusion_cols:
-            formatted_df[col] = formatted_df[col].apply(
-                lambda x: "{:.3e}".format(x) if isinstance(x, (int, float)) else x)
+        # 显示带单位标签的表格
+        st.dataframe(formatted_df.style.format({
+            'Pressure': '{:.2f} ' + st.session_state.units["pressure"],
+            'Temperature': '{:.2f} ' + st.session_state.units["temperature"],**{col: '{:.4f} ' + st.session_state.units["thermal"]
+               for col in formatted_df.columns if 'Thermal Conductivity' in col},**{col: '{:.4f} ' + st.session_state.units["viscosity"]
+               for col in formatted_df.columns if 'Viscosity' in col},**{col: '{:.3e} ' + st.session_state.units["diffusion"]
+               for col in formatted_df.columns if 'Diffusion' in col}}))
 
-        # 显示带格式的表格
-        st.dataframe(formatted_df.style.set_properties(
-            subset=diffusion_cols, ** {'text-align': 'center', 'font-family': 'monospace'}
-        ))
+        # # 识别需要格式化的列
+        # diffusion_cols = [col for col in formatted_df.columns if 'Diffusion' in col]
+        #
+        # # 应用科学计数法格式化
+        # for col in diffusion_cols:
+        #     formatted_df[col] = formatted_df[col].apply(
+        #         lambda x: "{:.3e}".format(x) if isinstance(x, (int, float)) else x)
+        #
+        # # 显示带格式的表格
+        # st.dataframe(formatted_df.style.set_properties(
+        #     subset=diffusion_cols, ** {'text-align': 'center', 'font-family': 'monospace'}
+        # ))
+        def format_with_units_and_scientific(styler):
+            units = st.session_state.units
+            column_units = {}
+            # 确定每个列的单位
+            for col in styler.columns:
+                if col == 'Pressure':
+                    column_units[col] = units["pressure"]
+                elif col == 'Temperature':
+                    column_units[col] = units["temperature"]
+                elif col.startswith('Thermal Conductivity'):
+                    column_units[col] = units["thermal"]
+                elif col.startswith('Viscosity'):
+                    column_units[col] = units["viscosity"]
+                elif col.startswith('Diffusion'):
+                    column_units[col] = units["diffusion"]
+                else:
+                    # 跳过未知列
+                    continue
 
+            # 应用格式化
+            for col, unit in column_units.items():
+                for col, unit in column_units.items():
+                    styler.format({col: lambda x, u=unit: (
+                        f"{x:.3e} {u}" if (isinstance(x, (int, float)) and not pd.isna(x) and (abs(x) >= 1000 or (0 < abs(x) < 0.001)))
+                        else (f"{x:.4f} {u}" if isinstance(x, (int, float)) and not pd.isna(x) else ""))}, na_rep="")
+            return styler
+
+        # 显示带单位和动态格式的表格
+        #st.dataframe(formatted_df.style.pipe(format_with_units_and_scientific))
         # 按钮在同一行
         col1, col2, col3 = st.columns(3)
 
@@ -374,10 +496,11 @@ elif st.session_state.page == "📌 定值查询":
 
     # 第一行：压力温度输入框并排
     col_pres_temp = st.columns(2)
+
     with col_pres_temp[0]:
-        pressure = st.number_input("输入压强 (MPa)", min_value=0.0, step=5.0, format="%.2f", value=None)
+        pressure = st.number_input("输入压强 (MPa) ", min_value=0.0, step=5.0, format="%.2f", value=0.0,help="请输入 40 - 200 MPa 之间的数值")
     with col_pres_temp[1]:
-        temperature = st.number_input("输入温度 (K)", min_value=0.0, step=5.0, format="%.1f", value=None)
+        temperature = st.number_input("输入温度 (K) ", min_value=0.0, step=5.0, format="%.1f", value=0.0,help="请输入 300 - 700 K 之间的数值")
 
     # 第二行：插值方法和查询按钮并排
     col_method_btn = st.columns([2, 2])
@@ -432,6 +555,36 @@ elif st.session_state.page == "📌 定值查询":
                 st.session_state.show_results = True
 
     if st.session_state.get("show_results", False):
+        if st.session_state.get("show_results", False):
+            # 单位转换
+            pressure_display, pressure_unit = convert_units(pressure, "pressure")
+            temp_display, temp_unit = convert_units(temperature, "temperature")
+
+            st.subheader(f"当前参数：{pressure_display:.2f} {pressure_unit} | {temp_display:.2f} {temp_unit}")
+
+            # 三列布局展示结果
+            col_thermal, col_visc, col_diff = st.columns(3)
+
+            with col_thermal:
+                st.markdown(f"<h4 style='font-size:16px;'>热导率 ({st.session_state.units['thermal']})</h4>",
+                            unsafe_allow_html=True)
+                for name, val in st.session_state.thermal_results.items():
+                    converted_val, _ = convert_units(val, "thermal")
+                    st.write(f"**{name}**: {converted_val:.4f}")
+
+            with col_visc:
+                st.markdown(f"<h4 style='font-size:16px;'>粘度 ({st.session_state.units['viscosity']})</h4>",
+                            unsafe_allow_html=True)
+                for name, val in st.session_state.viscosity_results.items():
+                    converted_val, _ = convert_units(val, "viscosity")
+                    st.write(f"**{name}**: {converted_val:.4f}")
+
+            with col_diff:
+                st.markdown(f"<h4 style='font-size:16px;'>扩散系数 ({st.session_state.units['diffusion']})</h4>",
+                            unsafe_allow_html=True)
+                for name, val in st.session_state.diffusion_results.items():
+                    converted_val, _ = convert_units(val, "diffusion")
+                    st.write(f"**{name}**: {converted_val:.3e}")
         st.subheader("📊 计算结果")
 
         # 三列布局展示结果
@@ -453,9 +606,48 @@ elif st.session_state.page == "📌 定值查询":
                 st.write(f"**{name}**: {val:.3e}")
 
 elif st.session_state.page == "⚙️ 功能":
-    st.title("⚙️ 功能")
-    st.write("请选择侧边栏的子功能按钮进行操作")
+    st.title("⚙️ 全局单位设置")
+    # 创建两列布局
+    col1, col2 = st.columns(2)
 
+    with col1:
+        st.subheader("压力单位")
+        st.session_state.units["pressure"] = st.selectbox(
+            "选择压力单位",
+            ["MPa", "bar", "kPa"],
+            index=["MPa", "bar", "kPa"].index(st.session_state.units["pressure"])
+        )
+
+        st.subheader("温度单位")
+        st.session_state.units["temperature"] = st.selectbox(
+            "选择温度单位",
+            ["K", "°C"],
+            index=["K", "°C"].index(st.session_state.units["temperature"])
+        )
+
+    with col2:
+        st.subheader("热导率单位")
+        st.session_state.units["thermal"] = st.selectbox(
+            "选择热导率单位",
+            ["W/m·K", "mW/m·K"],
+            index=["W/m·K", "mW/m·K"].index(st.session_state.units["thermal"])
+        )
+
+        st.subheader("粘度单位")
+        st.session_state.units["viscosity"] = st.selectbox(
+            "选择粘度单位",
+            ["μPa·s", "mPa·s", "Pa·s"],
+            index=["μPa·s", "mPa·s", "Pa·s"].index(st.session_state.units["viscosity"])
+        )
+
+        st.subheader("扩散系数单位")
+        st.session_state.units["diffusion"] = st.selectbox(
+            "选择扩散系数单位",
+            ["m²/s", "cm²/s"],
+            index=["m²/s", "cm²/s"].index(st.session_state.units["diffusion"])
+        )
+
+    st.success("单位设置已保存，所有查询结果将自动转换！")
 
 elif st.session_state.page == "🔬 实验数据查询":
     st.title("🔬 实验数据查询")
@@ -494,21 +686,13 @@ elif st.session_state.page == "🔬 实验数据查询":
         st.plotly_chart(fig)
 
     if st.button("📊 绘制全部粘度实验数据的 3D 图"):
-        fig = go.Figure(data=[go.Scatter3d(
-            x=viscosity_df['pressure'],
-            y=viscosity_df['temperature'],
-            z=viscosity_df['nianduexperimentalvalue'],
-            mode='markers',
+        fig = go.Figure(data=[go.Scatter3d(x=viscosity_df['pressure'],y=viscosity_df['temperature'],z=viscosity_df['nianduexperimentalvalue'],mode='markers',
             marker=dict(size=5, color=viscosity_df['nianduexperimentalvalue'], colorscale='Viridis')
         )])
 
         fig.update_layout(
             title="粘度实验数据 3D 可视化",
-            scene=dict(
-                xaxis_title="压力 (MPa)",
-                yaxis_title="温度 (K)",
-                zaxis_title="粘度实验值（μPa·s）"
-            )
+            scene=dict(xaxis_title="压力 (MPa)", yaxis_title="温度 (K)",zaxis_title="粘度实验值（μPa·s）")
         )
 
         st.plotly_chart(fig)
@@ -546,23 +730,31 @@ elif st.session_state.page == "🔬 实验数据查询":
             txt_data = table_data.to_csv(sep='\t', index=False).encode('utf-8')
             st.download_button("📥 下载 TXT", data=txt_data, file_name="实验数据.txt", mime="text/plain")
 
+        # st.subheader("📊 数据分布热力图")
+        #
+        # if st.button("🌡️ 生成热力图"):
+        #     fig, ax = plt.subplots(figsize=(12, 8))
+        #     pivot_data = table_data.pivot_table(index="Temperature", columns="Pressure", values="Experimental Value",
+        #                                         fill_value=0)
+        #
+        #     sns.heatmap(pivot_data, ax=ax, cmap="coolwarm", annot=False, linewidths=0.5)  # 颜色方案 + 显示数值
+        #     ax.set_title("实验数据密度热力图")
+        #     ax.set_xlabel("Pressure (MPa)")
+        #     ax.set_ylabel("Temperature (K)")
+        #     ax.set_xticks(ax.get_xticks()[::5])
+        #     ax.set_yticks(ax.get_yticks()[::5])
+        #     st.pyplot(fig)  # 渲染热力图
+
         # **📊 绘制三维图**
         if st.button("📊 绘制 3D 图"):
             fig = go.Figure(data=[go.Scatter3d(
-                x=table_data['Pressure'],
-                y=table_data['Temperature'],
-                z=table_data['Experimental Value'],
-                mode='markers',
+                x=table_data['Pressure'],y=table_data['Temperature'],z=table_data['Experimental Value'],mode='markers',
                 marker=dict(size=5, color=table_data['Experimental Value'], colorscale='Viridis')
             )])
 
             fig.update_layout(
                 title="实验数据 3D 可视化",
                 scene=dict(
-                    xaxis_title="压力 (MPa)",
-                    yaxis_title="温度 (K)",
-                    zaxis_title="实验值"
-                )
+                    xaxis_title="压力 (MPa)",yaxis_title="温度 (K)",zaxis_title="实验值")
             )
-
             st.plotly_chart(fig)
